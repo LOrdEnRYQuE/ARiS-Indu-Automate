@@ -9,8 +9,9 @@ from ai_engineer import analyze
 from metrics import equipment_metrics
 from equipment_health import equipment_health
 from telemetry_freshness import assess_freshness
+from system_diagnostics import diagnose_database
 
-def render_dashboard(summary, events, freshness=None):
+def render_dashboard(summary, events, freshness=None, diagnostics=None):
     cards = [
         ("Virtual machines", summary["equipment_count"]),
         ("Telemetry events", summary["event_count"]),
@@ -46,6 +47,8 @@ def render_dashboard(summary, events, freshness=None):
         ("unknown" if item["age_seconds"] is None else str(round(item["age_seconds"], 1))) +
         "</td></tr>" for machine, item in sorted((freshness or {}).items())
     )
+    diagnostics = diagnostics or {"storage_state": "unknown", "reason": None}
+    diagnostics_panel = "<p>Storage: " + escape(str(diagnostics["storage_state"])) + " | Reason: " + escape(str(diagnostics.get("reason"))) + "</p>"
     advice = ""
     if events:
         latest = {}
@@ -86,6 +89,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 <th>Equipment</th><th>Produced units</th><th>Alarm events</th><th>Latest status</th><th>OEE</th>
 </tr></thead><tbody>{metric_rows}</tbody></table></div>
 <h2>Equipment health</h2><p>SIMULATION STATUS — not physical safety verification</p><div class="wrapper"><table><thead><tr><th>Equipment</th><th>Health</th><th>Alarm</th></tr></thead><tbody>{health_rows}</tbody></table></div>
+<h2>System diagnostics</h2><p>Not a physical safety check</p>{diagnostics_panel}
 <h2>Telemetry freshness</h2><p>Not proof of communication loss or physical safety</p><div class="wrapper"><table><thead><tr><th>Equipment</th><th>Freshness</th><th>Age (seconds)</th></tr></thead><tbody>{freshness_rows}</tbody></table></div>
 <h2>AI Engineer — advisory only</h2><div class="grid">{advice}</div><h2>Recent telemetry</h2>
 <div class="wrapper"><table><thead><tr><th>Equipment</th><th>Sequence</th>
@@ -95,7 +99,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 def make_handler(database_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics", "/api/health", "/api/freshness"):
+            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics", "/api/health", "/api/freshness", "/api/system"):
                 self.send_error(404)
                 return
             try:
@@ -106,10 +110,10 @@ def make_handler(database_path):
                 finally:
                     gateway.close()
                 if self.path == "/":
-                    body = render_dashboard(summary, events, assess_freshness(receipts, now=time.time())).encode("utf-8")
+                    body = render_dashboard(summary, events, assess_freshness(receipts, now=time.time()), diagnose_database(database_path)).encode("utf-8")
                     content_type = "text/html; charset=utf-8"
                 else:
-                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else (equipment_health(events) if self.path == "/api/health" else (assess_freshness(receipts, now=time.time()) if self.path == "/api/freshness" else events)))
+                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else (equipment_health(events) if self.path == "/api/health" else (assess_freshness(receipts, now=time.time()) if self.path == "/api/freshness" else (diagnose_database(database_path) if self.path == "/api/system" else events))))
                     body = json.dumps(data).encode("utf-8")
                     content_type = "application/json"
                 self.send_response(200)
