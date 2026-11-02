@@ -103,6 +103,16 @@ def make_handler(database_path):
                 self.send_error(404)
                 return
             try:
+                if self.path == "/api/system":
+                    body = json.dumps(diagnose_database(database_path)).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("Content-Security-Policy", "default-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 gateway = Gateway(database_path)
                 try:
                     summary, events = gateway.summary(), gateway.events()
