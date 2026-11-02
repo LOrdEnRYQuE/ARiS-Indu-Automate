@@ -2,14 +2,14 @@
 from pathlib import Path
 from dashboard import make_handler
 from gateway import Gateway
-from simulator import simulate
+from simulator import simulate_line
 from http.server import ThreadingHTTPServer
 
 path = Path("telemetry.db")
 gateway = Gateway(path)
 try:
     if gateway.summary()["event_count"] == 0:
-        for event in simulate(10, alarm_at=7):
+        for event in simulate_line(10, alarm_at=7):
             gateway.ingest(event)
 finally:
     gateway.close()
