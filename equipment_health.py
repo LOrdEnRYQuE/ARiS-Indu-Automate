@@ -9,9 +9,9 @@ def equipment_health(events):
             latest[machine] = event
     return {
         machine: {
-            'health': event['status'],
+            'health': event.get('status') if event.get('status') in ('running', 'alarm', 'stopped', 'idle') else 'unknown',
             'last_sequence': event['sequence'],
-            'alarm_code': event['alarm_code'],
+            'alarm_code': event.get('alarm_code'),
             'source': 'simulator',
             'physical_safety_verified': False,
         }
