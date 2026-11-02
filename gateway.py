@@ -73,9 +73,19 @@ class Gateway:
 
     def events(self):
         rows = self.connection.execute(
-            "SELECT payload FROM telemetry ORDER BY equipment_id, sequence"
+            "SELECT equipment_id, sequence, payload FROM telemetry ORDER BY equipment_id, sequence"
         ).fetchall()
-        return [json.loads(row[0]) for row in rows]
+        events = []
+        for equipment_id, sequence, payload in rows:
+            try:
+                event = json.loads(payload)
+                validate(event)
+                if event["equipment_id"] != equipment_id or event["sequence"] != sequence:
+                    raise ValueError("stored identity mismatch")
+            except (ValueError, TypeError, KeyError) as exc:
+                raise ValueError("corrupt telemetry record") from exc
+            events.append(event)
+        return events
 
     def summary(self):
         events = self.events()
