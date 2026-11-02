@@ -21,7 +21,12 @@ def diagnose_database(path):
         rows = connection.execute(
             "SELECT equipment_id, sequence, payload FROM telemetry ORDER BY equipment_id, sequence"
         ).fetchall()
+        last_sequences = {}
         for equipment_id, sequence, payload in rows:
+            previous = last_sequences.get(equipment_id)
+            if sequence != (0 if previous is None else previous + 1):
+                raise ValueError("historical sequence gap")
+            last_sequences[equipment_id] = sequence
             event = json.loads(payload)
             validate(event)
             if event["equipment_id"] != equipment_id or event["sequence"] != sequence:
