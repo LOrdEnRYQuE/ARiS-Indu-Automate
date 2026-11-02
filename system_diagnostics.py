@@ -22,6 +22,7 @@ def diagnose_database(path):
             "SELECT equipment_id, sequence, payload FROM telemetry ORDER BY equipment_id, sequence"
         ).fetchall()
         last_sequences = {}
+        last_production = {}
         for equipment_id, sequence, payload in rows:
             previous = last_sequences.get(equipment_id)
             if sequence != (0 if previous is None else previous + 1):
@@ -31,6 +32,10 @@ def diagnose_database(path):
             validate(event)
             if event["equipment_id"] != equipment_id or event["sequence"] != sequence:
                 raise ValueError("stored identity mismatch")
+            previous_units = last_production.get(equipment_id)
+            if previous_units is not None and event["produced_units"] < previous_units:
+                raise ValueError("simulated production counter regressed")
+            last_production[equipment_id] = event["produced_units"]
         return {"storage_state": "ready", "reason": None,
                 "event_count": len(rows), "physical_safety_verified": False}
     except (sqlite3.DatabaseError, ValueError, TypeError, KeyError, OSError):
