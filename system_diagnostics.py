@@ -1,11 +1,14 @@
 """Read-only local storage diagnostics; never a physical equipment safety check."""
 import sqlite3
+from pathlib import Path
 
 from gateway import Gateway
 
 
 def diagnose_database(path):
     """Inspect persisted simulated telemetry without claiming machine health."""
+    if not Path(path).is_file():
+        return {"storage_state": "degraded", "reason": "database_missing", "event_count": None, "physical_safety_verified": False}
     gateway = None
     try:
         gateway = Gateway(path)
