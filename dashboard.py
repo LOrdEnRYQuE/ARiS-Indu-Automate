@@ -6,6 +6,7 @@ import json
 from gateway import Gateway
 from ai_engineer import analyze
 from metrics import equipment_metrics
+from equipment_health import equipment_health
 
 def render_dashboard(summary, events):
     cards = [
@@ -30,6 +31,12 @@ def render_dashboard(summary, events):
         escape(item["latest_status"]) + "</td><td>" +
         escape(item["oee_status"]) + "</td></tr>"
         for machine, item in sorted(equipment_metrics(events).items())
+    )
+    health_rows = "".join(
+        "<tr><td>" + escape(machine) + "</td><td>" +
+        escape(str(item["health"])) + "</td><td>" +
+        escape(str(item["alarm_code"])) + "</td></tr>"
+        for machine, item in equipment_health(events).items()
     )
     advice = ""
     if events:
@@ -70,6 +77,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 <h2>Equipment performance</h2><div class="wrapper"><table><thead><tr>
 <th>Equipment</th><th>Produced units</th><th>Alarm events</th><th>Latest status</th><th>OEE</th>
 </tr></thead><tbody>{metric_rows}</tbody></table></div>
+<h2>Equipment health</h2><p>SIMULATION STATUS — not physical safety verification</p><div class="wrapper"><table><thead><tr><th>Equipment</th><th>Health</th><th>Alarm</th></tr></thead><tbody>{health_rows}</tbody></table></div>
 <h2>AI Engineer — advisory only</h2><div class="grid">{advice}</div><h2>Recent telemetry</h2>
 <div class="wrapper"><table><thead><tr><th>Equipment</th><th>Sequence</th>
 <th>Status</th><th>Units</th><th>Alarm</th></tr></thead><tbody>{rows}</tbody>
@@ -78,7 +86,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 def make_handler(database_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics"):
+            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics", "/api/health"):
                 self.send_error(404)
                 return
             try:
@@ -91,7 +99,7 @@ def make_handler(database_path):
                     body = render_dashboard(summary, events).encode("utf-8")
                     content_type = "text/html; charset=utf-8"
                 else:
-                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else events)
+                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else (equipment_health(events) if self.path == "/api/health" else events))
                     body = json.dumps(data).encode("utf-8")
                     content_type = "application/json"
                 self.send_response(200)
