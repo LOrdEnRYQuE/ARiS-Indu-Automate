@@ -3,10 +3,12 @@ from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
+import time
 from gateway import Gateway
 from ai_engineer import analyze
 from metrics import equipment_metrics
 from equipment_health import equipment_health
+from telemetry_freshness import assess_freshness
 
 def render_dashboard(summary, events):
     cards = [
@@ -86,20 +88,21 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 def make_handler(database_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics", "/api/health"):
+            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics", "/api/health", "/api/freshness"):
                 self.send_error(404)
                 return
             try:
                 gateway = Gateway(database_path)
                 try:
                     summary, events = gateway.summary(), gateway.events()
+                    receipts = gateway.receipt_times()
                 finally:
                     gateway.close()
                 if self.path == "/":
                     body = render_dashboard(summary, events).encode("utf-8")
                     content_type = "text/html; charset=utf-8"
                 else:
-                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else (equipment_health(events) if self.path == "/api/health" else events))
+                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else (equipment_health(events) if self.path == "/api/health" else (assess_freshness(receipts, now=time.time()) if self.path == "/api/freshness" else events)))
                     body = json.dumps(data).encode("utf-8")
                     content_type = "application/json"
                 self.send_response(200)
