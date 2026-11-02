@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
 from gateway import Gateway
+from ai_engineer import analyze
 
 def render_dashboard(summary, events):
     cards = [
@@ -21,6 +22,22 @@ def render_dashboard(summary, events):
         ("equipment_id", "sequence", "status", "produced_units", "alarm_code")) + "</tr>"
         for e in reversed(events[-100:])
     )
+    advice = ""
+    if events:
+        latest = {}
+        for event in events:
+            latest[event["equipment_id"]] = event
+        entries = []
+        for event in latest.values():
+            result = analyze(event)
+            entries.append(
+                "<article class=\"card\"><h3>" + escape(result["equipment_id"]) +
+                "</h3><p>" + escape(result["explanation"]) +
+                "</p><p>" + escape(result["recommendation"]) +
+                "</p><small>Evidence: " + escape(result["basis"]) +
+                " | Advisory only — no machine commands</small></article>"
+            )
+        advice = "".join(entries)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="5">
@@ -37,7 +54,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 </style></head><body><header><h1>ARiS Industrial Automation</h1>
 <p class="notice">SIMULATION ONLY — No industrial hardware connected</p>
 <p>Local read-only dashboard · refreshes every 5 seconds</p></header>
-<main><div class="grid">{blocks}</div><h2>Recent telemetry</h2>
+<main><div class="grid">{blocks}</div><h2>AI Engineer — advisory only</h2><div class="grid">{advice}</div><h2>Recent telemetry</h2>
 <div class="wrapper"><table><thead><tr><th>Equipment</th><th>Sequence</th>
 <th>Status</th><th>Units</th><th>Alarm</th></tr></thead><tbody>{rows}</tbody>
 </table></div></main></body></html>"""
