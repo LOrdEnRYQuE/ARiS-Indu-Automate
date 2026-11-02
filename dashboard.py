@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 from gateway import Gateway
 from ai_engineer import analyze
+from metrics import equipment_metrics
 
 def render_dashboard(summary, events):
     cards = [
@@ -21,6 +22,14 @@ def render_dashboard(summary, events):
         "<tr>" + "".join(f"<td>{escape(str(e[field]))}</td>" for field in
         ("equipment_id", "sequence", "status", "produced_units", "alarm_code")) + "</tr>"
         for e in reversed(events[-100:])
+    )
+    metric_rows = "".join(
+        "<tr><td>" + escape(machine) + "</td><td>" +
+        str(item["produced_units"]) + "</td><td>" +
+        str(item["alarm_events"]) + "</td><td>" +
+        escape(item["latest_status"]) + "</td><td>" +
+        escape(item["oee_status"]) + "</td></tr>"
+        for machine, item in sorted(equipment_metrics(events).items())
     )
     advice = ""
     if events:
@@ -57,7 +66,11 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 </style></head><body><header><h1>ARiS Industrial Automation</h1>
 <p class="notice">SIMULATION ONLY — No industrial hardware connected</p>
 <p>Local read-only dashboard · refreshes every 5 seconds</p></header>
-<main><div class="grid">{blocks}</div><h2>AI Engineer — advisory only</h2><div class="grid">{advice}</div><h2>Recent telemetry</h2>
+<main><div class="grid">{blocks}</div>
+<h2>Equipment performance</h2><div class="wrapper"><table><thead><tr>
+<th>Equipment</th><th>Produced units</th><th>Alarm events</th><th>Latest status</th><th>OEE</th>
+</tr></thead><tbody>{metric_rows}</tbody></table></div>
+<h2>AI Engineer — advisory only</h2><div class="grid">{advice}</div><h2>Recent telemetry</h2>
 <div class="wrapper"><table><thead><tr><th>Equipment</th><th>Sequence</th>
 <th>Status</th><th>Units</th><th>Alarm</th></tr></thead><tbody>{rows}</tbody>
 </table></div></main></body></html>"""
@@ -65,7 +78,7 @@ th,td{{text-align:left;padding:.75rem;border-bottom:1px solid #324461}}
 def make_handler(database_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path not in ("/", "/api/summary", "/api/events"):
+            if self.path not in ("/", "/api/summary", "/api/events", "/api/metrics"):
                 self.send_error(404)
                 return
             try:
@@ -78,7 +91,7 @@ def make_handler(database_path):
                     body = render_dashboard(summary, events).encode("utf-8")
                     content_type = "text/html; charset=utf-8"
                 else:
-                    data = summary if self.path == "/api/summary" else events
+                    data = summary if self.path == "/api/summary" else (equipment_metrics(events) if self.path == "/api/metrics" else events)
                     body = json.dumps(data).encode("utf-8")
                     content_type = "application/json"
                 self.send_response(200)
