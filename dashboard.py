@@ -29,8 +29,11 @@ def render_dashboard(summary, events):
             latest[event["equipment_id"]] = event
         entries = []
         for event in latest.values():
-            result = analyze(event)
-            entries.append(
+            try:
+                result = analyze(event)
+            except (ValueError, TypeError):
+                result = {"equipment_id": str(event.get("equipment_id", "UNKNOWN")), "explanation": "Telemetry validation failed.", "recommendation": "Review input data.", "basis": "unverified_event"}
+            entries.append
                 "<article class=\"card\"><h3>" + escape(result["equipment_id"]) +
                 "</h3><p>" + escape(result["explanation"]) +
                 "</p><p>" + escape(result["recommendation"]) +
