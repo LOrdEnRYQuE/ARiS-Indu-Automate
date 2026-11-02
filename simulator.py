@@ -30,3 +30,16 @@ def simulate(cycles: int = 10, alarm_at: int | None = None) -> list[dict]:
 
 if __name__ == "__main__":
     print(json.dumps(simulate(10, alarm_at=7), indent=2))
+
+def simulate_line(cycles: int = 10, alarm_at: int | None = None) -> list[dict]:
+    """Simulate two independent virtual machines, one with optional feed alarm.
+
+    The second machine continues producing when the first enters alarm.
+    These are equipment-level counts, not verified finished-line output.
+    """
+    primary = simulate(cycles, alarm_at)
+    secondary = [
+        {**event, "equipment_id": "KUKA-VIRTUAL-02"}
+        for event in simulate(cycles)
+    ]
+    return [event for pair in zip(primary, secondary) for event in pair]
