@@ -1,6 +1,7 @@
 """Local read-only telemetry gateway. No industrial control or network listeners."""
 import json
 import sqlite3
+import time
 from pathlib import Path
 
 REQUIRED = {"equipment_id", "source", "sequence", "status", "cycle_time_ms", "produced_units", "alarm_code"}
@@ -32,7 +33,17 @@ class Gateway:
             payload TEXT NOT NULL,
             PRIMARY KEY(equipment_id, sequence)
         )""")
+        columns = {row[1] for row in self.connection.execute("PRAGMA table_info(telemetry)")}
+        if "received_at" not in columns:
+            self.connection.execute("ALTER TABLE telemetry ADD COLUMN received_at REAL")
         self.connection.commit()
+
+    def receipt_times(self):
+        """Last persisted receipt per virtual equipment; legacy rows stay unknown."""
+        rows = self.connection.execute(
+            "SELECT equipment_id, MAX(received_at) FROM telemetry GROUP BY equipment_id"
+        ).fetchall()
+        return dict(rows)
 
     def ingest(self, event):
         event = validate(event)
@@ -55,8 +66,8 @@ class Gateway:
             if last is None and event["sequence"] != 0:
                 raise ValueError("first sequence must be zero")
             self.connection.execute(
-                "INSERT INTO telemetry VALUES (?, ?, ?)",
-                (event["equipment_id"], event["sequence"], payload)
+                "INSERT INTO telemetry (equipment_id, sequence, payload, received_at) VALUES (?, ?, ?, ?)",
+                (event["equipment_id"], event["sequence"], payload, time.time())
             )
         return True
 
